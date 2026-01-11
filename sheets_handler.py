@@ -94,14 +94,14 @@ class SheetsHandler:
         except Exception as e:
             raise Exception(f"❌ 日次データ保存エラー: {str(e)}")
     
-    def save_video_data(self, video_data_list):
+    def save_video_data(self, video_data):
         """
         動画別データをシートに保存
         
         Parameters:
         -----------
-        video_data_list : list
-            動画データのリスト
+        video_data : dict
+            動画データ（辞書型）
         """
         try:
             worksheet = self.worksheets['videos']
@@ -110,28 +110,25 @@ class SheetsHandler:
             if worksheet.row_count == 0 or worksheet.row_values(1) == []:
                 headers = [
                     '動画ID', '動画タイトル', '公開日時', '再生回数',
-                    '高評価数', 'コメント数', '視聴維持率(%)',
-                    'インプレッションCTR(%)', '平均視聴時間(秒)', '更新日時'
+                    '高評価数', 'コメント数', '動画時間', 'サムネイルURL', '更新日時'
                 ]
-                worksheet.update(values=[headers], range_name='A1:J1')
+                worksheet.update(values=[headers], range_name='A1:I1')
             
-            # 各動画データを追加
-            for video_data in video_data_list:
-                row_data = [
-                    video_data.get('video_id', ''),
-                    video_data.get('title', ''),
-                    video_data.get('published_at', ''),
-                    video_data.get('views', 0),
-                    video_data.get('likes', 0),
-                    video_data.get('comments', 0),
-                    video_data.get('average_view_percentage', 0),
-                    video_data.get('impression_ctr', 0),
-                    video_data.get('average_view_duration', 0),
-                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                ]
-                worksheet.append_row(row_data)
+            # 動画データを1行追加
+            row_data = [
+                video_data.get('video_id', ''),
+                video_data.get('title', ''),
+                video_data.get('published_at', ''),
+                video_data.get('views', 0),
+                video_data.get('likes', 0),
+                video_data.get('comments', 0),
+                video_data.get('duration', ''),
+                video_data.get('thumbnail_url', ''),
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ]
+            worksheet.append_row(row_data)
             
-            print(f"✅ 動画データ保存成功: {len(video_data_list)}件")
+            print(f"✅ 動画データ保存成功: {video_data.get('video_id', 'Unknown')}")
             
         except Exception as e:
             raise Exception(f"❌ 動画データ保存エラー: {str(e)}")

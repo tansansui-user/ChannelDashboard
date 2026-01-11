@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from youtube_data import YouTubeDataFetcher
 from sheets_handler import SheetsHandler
+from dashboard import show_dashboard
 import config
 
 # ページ設定
@@ -24,7 +25,7 @@ st.title(f"{config.APP_ICON} {config.APP_TITLE}")
 st.sidebar.title("メニュー")
 menu = st.sidebar.radio(
     "機能を選択",
-    ["ダッシュボード", "目標管理", "日報作成", "設定"]
+    ["データ取得", "ダッシュボード", "目標管理", "日報作成", "設定"]
 )
 
 # セッション状態の初期化
@@ -37,9 +38,9 @@ if 'channel_stats' not in st.session_state:
 if 'recent_videos' not in st.session_state:
     st.session_state.recent_videos = None
 
-# ダッシュボード
-if menu == "ダッシュボード":
-    st.header("📊 ダッシュボード")
+# データ取得
+if menu == "データ取得":
+    st.header("📺 データ取得")
     
     # データ取得セクション
     st.subheader("🔄 データ取得")
@@ -237,6 +238,21 @@ if menu == "ダッシュボード":
     この問題は Week 2後半〜Week 3 で調査・解決予定です。
     """)
 
+# ダッシュボード
+elif menu == "ダッシュボード":
+    try:
+        # Sheets Handler初期化
+        if st.session_state.sheets_handler is None:
+            st.session_state.sheets_handler = SheetsHandler()
+        
+        # ダッシュボード表示
+        show_dashboard(st.session_state.sheets_handler)
+        
+    except Exception as e:
+        st.error(f"❌ ダッシュボードの表示に失敗しました: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+
 # 目標管理
 elif menu == "目標管理":
     st.header("🎯 目標管理")
@@ -259,5 +275,5 @@ elif menu == "設定":
     st.markdown(f"""
     - **チャンネルID**: `{config.CHANNEL_ID}`
     - **スプレッドシートID**: `{config.SPREADSHEET_ID}`
-    - **プロジェクト**: Phase 1 - Week 2（データ取得機能実装）
+    - **プロジェクト**: Phase 1 - Week 3（ダッシュボード作成）
     """)

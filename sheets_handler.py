@@ -6,6 +6,7 @@ Google Sheets操作モジュール
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+import pandas as pd
 import config
 
 class SheetsHandler:
@@ -146,7 +147,7 @@ class SheetsHandler:
             
         Returns:
         --------
-        list : 日次データのリスト
+        pd.DataFrame : 日次データのDataFrame
         """
         try:
             worksheet = self.worksheets['daily']
@@ -154,19 +155,22 @@ class SheetsHandler:
             # 全データを取得
             all_data = worksheet.get_all_records()
             
+            # DataFrameに変換
+            df = pd.DataFrame(all_data)
+            
+            # 空のDataFrameの場合はそのまま返す
+            if df.empty:
+                return df
+            
             # 日付でフィルタリング（指定がある場合）
             if start_date or end_date:
-                filtered_data = []
-                for row in all_data:
-                    row_date = row.get('日付', '')
-                    if start_date and row_date < start_date:
-                        continue
-                    if end_date and row_date > end_date:
-                        continue
-                    filtered_data.append(row)
-                return filtered_data
+                if '日付' in df.columns:
+                    if start_date:
+                        df = df[df['日付'] >= start_date]
+                    if end_date:
+                        df = df[df['日付'] <= end_date]
             
-            return all_data
+            return df
             
         except Exception as e:
             raise Exception(f"❌ 日次データ取得エラー: {str(e)}")
@@ -182,7 +186,7 @@ class SheetsHandler:
             
         Returns:
         --------
-        list or dict : 動画データ（video_id指定時は1件、未指定時は全件）
+        pd.DataFrame : 動画データのDataFrame
         """
         try:
             worksheet = self.worksheets['videos']
@@ -190,14 +194,19 @@ class SheetsHandler:
             # 全データを取得
             all_data = worksheet.get_all_records()
             
+            # DataFrameに変換
+            df = pd.DataFrame(all_data)
+            
+            # 空のDataFrameの場合はそのまま返す
+            if df.empty:
+                return df
+            
             # 特定の動画IDが指定されている場合
             if video_id:
-                for row in all_data:
-                    if row.get('動画ID') == video_id:
-                        return row
-                return None
+                if '動画ID' in df.columns:
+                    df = df[df['動画ID'] == video_id]
             
-            return all_data
+            return df
             
         except Exception as e:
             raise Exception(f"❌ 動画データ取得エラー: {str(e)}")
@@ -297,6 +306,7 @@ if __name__ == "__main__":
         print("\n--- データ取得テスト ---")
         daily_data = handler.get_daily_data()
         print(f"取得した日次データ件数: {len(daily_data)}件")
+        print(f"データ型: {type(daily_data)}")
         
         print("\n✅ 全てのテスト成功！")
         

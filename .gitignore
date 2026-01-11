@@ -1,0 +1,23 @@
+# 認証情報（絶対にGitにアップロードしない）
+credentials.json
+token.json
+service_account.json
+.env
+
+# Python関連
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE関連
+.vscode/
+.idea/
+
+# OS関連
+.DS_Store
+Thumbs.db

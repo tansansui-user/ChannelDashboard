@@ -4,10 +4,10 @@ ChannelDashboard 設定ファイル
 """
 
 # YouTubeチャンネル設定
-CHANNEL_ID = ""  # あとで設定
+CHANNEL_ID = "UCQz3h3FKeQ2u0L4dPnebbyg"  # YouTubeチャンネルID
 
 # Google Sheets設定
-SPREADSHEET_ID = ""  # あとで設定
+SPREADSHEET_ID = "15IBx7Z6xTVZCYIrGk5vVd2yKPYkCkWIid7jKPFWslmk"  # GoogleスプレッドシートID
 SHEET_NAMES = {
     "daily": "日次データ",
     "videos": "動画別データ",

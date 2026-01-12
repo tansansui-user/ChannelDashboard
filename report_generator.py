@@ -43,12 +43,8 @@ class ReportGenerator:
         # 日報設定をロード
         settings = self._load_settings()
         
-        # 設定がある場合は「前回の設定で作成」ボタンを表示
-        if settings:
-            if st.button("🔄 前回の設定で日報を作成", type="primary"):
-                report = self._generate_report(settings)
-                self._display_report(report)
-                return
+        # 動画データを取得
+        video_data = self.sheets.get_video_data()
         
         st.write("---")
         
@@ -67,31 +63,105 @@ class ReportGenerator:
         
         st.write("---")
         
+        # 新規投稿動画の選択
+        selected_video = None
+        if include_new_video:
+            st.write("#### 🎬 報告する動画を選択")
+            
+            if not video_data.empty and "公開日時" in video_data.columns:
+                # 公開日時をdatetime型に変換
+                video_data["公開日時_dt"] = pd.to_datetime(video_data["公開日時"], errors='coerce')
+                video_data["公開日"] = video_data["公開日時_dt"].dt.date
+                
+                # 公開日の一覧を取得（新しい順）
+                available_dates = video_data["公開日"].dropna().unique()
+                available_dates = sorted(available_dates, reverse=True)
+                
+                if len(available_dates) > 0:
+                    # 日付選択（デフォルトは前日）
+                    default_video_date = datetime.now().date() - timedelta(days=1)
+                    selected_date = st.date_input(
+                        "動画の公開日を選択",
+                        value=default_video_date,
+                        help="報告したい動画の公開日を選択してください"
+                    )
+                    
+                    # 選択した日付の動画をフィルタ
+                    videos_on_date = video_data[video_data["公開日"] == selected_date]
+                    
+                    if not videos_on_date.empty:
+                        # 動画の選択肢を作成
+                        video_options = []
+                        for _, row in videos_on_date.iterrows():
+                            pub_time = row["公開日時_dt"]
+                            if pd.notna(pub_time):
+                                # UTC→JST変換（+9時間）
+                                pub_time_jst = pub_time + timedelta(hours=9)
+                                time_str = pub_time_jst.strftime("%H:%M")
+                            else:
+                                time_str = "不明"
+                            title = row.get("動画タイトル", "タイトル不明")[:30]
+                            video_options.append(f"{time_str} 公開 - {title}")
+                        
+                        # 動画を選択
+                        selected_video_idx = st.selectbox(
+                            "報告する動画を選択",
+                            range(len(video_options)),
+                            format_func=lambda x: video_options[x],
+                            help="複数の動画がある場合は選択してください"
+                        )
+                        
+                        selected_video = videos_on_date.iloc[selected_video_idx]
+                        
+                        # 選択した動画の情報を表示
+                        st.success(f"✅ 選択中: {selected_video.get('動画タイトル', '不明')}")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**再生回数**: {int(selected_video.get('再生回数', 0)):,} 回")
+                        with col2:
+                            st.write(f"**高評価数**: {int(selected_video.get('高評価数', 0)):,} 件")
+                    else:
+                        st.warning(f"⚠️ {selected_date} に公開された動画はありません")
+                else:
+                    st.warning("⚠️ 動画データがありません。「データ取得」タブでデータを取得してください。")
+            else:
+                st.warning("⚠️ 動画データがありません。「データ取得」タブでデータを取得してください。")
+        
+        st.write("---")
+        
+        # 収益の日付選択
+        selected_revenue_date = None
+        if include_revenue:
+            st.write("#### 💰 収益の日付を選択")
+            
+            selected_revenue_date = st.date_input(
+                "収益の日付を選択",
+                value=datetime.now().date() - timedelta(days=2),
+                help="報告したい収益の日付を選択してください（通常は前々日の収益が確定）"
+            )
+            
+            st.info("💡 収益データはYouTube Analytics API実装後に自動取得されます。現在は日付のみ選択可能です。")
+        
+        st.write("---")
+        
         # 手動入力項目（YouTube Studioで確認した値を入力）
         st.write("#### ✏️ 手動入力項目")
         st.caption("※YouTube Studioで確認した値を入力してください")
         
-        col1, col2 = st.columns(2)
+        # 高評価率の目標は「目標管理」メニューで設定
+        current_goals = self.goals._get_current_goals()
+        like_rate_goal = current_goals.get("goal_like_rate", 90.0)
         
-        with col1:
-            manual_like_rate = st.number_input(
-                "24時間高評価率（%）",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.1,
-                help="YouTube Studio → コンテンツ → アナリティクス → エンゲージメント → 高評価率（低評価比）"
-            )
+        st.info(f"💡 高評価率の目標: **{like_rate_goal:.1f}%**（「目標管理」メニューで変更可能）")
         
-        with col2:
-            manual_like_rate_goal = st.number_input(
-                "高評価率の目標（%）",
-                min_value=0.0,
-                max_value=100.0,
-                value=90.0,
-                step=0.1,
-                help="高評価率の目標値"
-            )
+        manual_like_rate = st.number_input(
+            "24時間高評価率（%）※実績値を入力",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=0.1,
+            help="YouTube Studio → コンテンツ → アナリティクス → エンゲージメント → 高評価率（低評価比）"
+        )
         
         st.write("---")
         
@@ -103,7 +173,8 @@ class ReportGenerator:
                 "include_channel_stats": include_channel_stats,
                 "include_top_videos": include_top_videos,
                 "manual_like_rate": manual_like_rate,
-                "manual_like_rate_goal": manual_like_rate_goal
+                "selected_video": selected_video.to_dict() if selected_video is not None else None,
+                "selected_revenue_date": selected_revenue_date
             }
             
             # 設定を保存
@@ -158,90 +229,110 @@ class ReportGenerator:
         
         # 日付
         today = datetime.now()
-        yesterday = today - timedelta(days=1)
         today_str = f"{today.year}年{today.month}月{today.day}日"
-        yesterday_str = f"{yesterday.month}月{yesterday.day}日"
         
         # 日報の開始
         report_lines = []
-        report_lines.append("[info]")
-        report_lines.append(f"📊 YouTubeチャンネル日報（{today_str}）")
+        report_lines.append("日報をお送りいたします")
         report_lines.append("")
         
         # ■新規投稿動画について
-        if settings.get("include_new_video") and not video_data.empty:
+        if settings.get("include_new_video"):
             report_lines.append("■新規投稿動画について")
             
-            # 最新動画を取得
-            video_data_sorted = video_data.copy()
-            video_data_sorted["公開日時"] = pd.to_datetime(video_data_sorted["公開日時"], errors='coerce')
-            video_data_sorted = video_data_sorted.sort_values("公開日時", ascending=False)
+            # 選択した動画を使用（なければ最新動画）
+            selected_video_dict = settings.get("selected_video")
             
-            if not video_data_sorted.empty:
+            if selected_video_dict:
+                # 選択した動画を使用
+                pub_date = pd.to_datetime(selected_video_dict.get("公開日時"), errors='coerce')
+                views = int(selected_video_dict.get("再生回数", 0))
+            elif not video_data.empty:
+                # 最新動画を使用（フォールバック）
+                video_data_sorted = video_data.copy()
+                video_data_sorted["公開日時"] = pd.to_datetime(video_data_sorted["公開日時"], errors='coerce')
+                video_data_sorted = video_data_sorted.sort_values("公開日時", ascending=False)
                 latest_video = video_data_sorted.iloc[0]
-                
-                # 公開日時を取得
                 pub_date = latest_video.get("公開日時")
-                if pd.notna(pub_date):
-                    pub_date_str = f"{pub_date.month}月{pub_date.day}日分　{pub_date.hour}時公開"
-                else:
-                    pub_date_str = "不明"
-                
-                report_lines.append(pub_date_str)
-                
-                # 24時間視聴回数
                 views = int(latest_video.get("再生回数", 0))
-                goal_24h = current_goals.get("goal_24h_views", 0)
-                
-                if goal_24h > 0:
-                    achievement = "達成" if views >= goal_24h else "未達"
-                    report_lines.append(f"　◇24時間視聴回数")
-                    report_lines.append(f"　　目標：{goal_24h:,}回　結果：{views:,}回（{achievement}）")
-                else:
-                    report_lines.append(f"　◇24時間視聴回数")
-                    report_lines.append(f"　　結果：{views:,}回")
-                
-                report_lines.append("")
-                
-                # 24時間高評価率（手動入力値を使用）
-                manual_like_rate = settings.get("manual_like_rate", 0.0)
-                manual_like_rate_goal = settings.get("manual_like_rate_goal", 90.0)
-                
-                if manual_like_rate > 0:
-                    achievement_like = "達成" if manual_like_rate >= manual_like_rate_goal else "未達"
-                    report_lines.append(f"　◇24時間高評価率")
-                    report_lines.append(f"　　目標：{manual_like_rate_goal:.0f}％　結果：{manual_like_rate:.1f}%（{achievement_like}）")
-                else:
-                    report_lines.append(f"　◇24時間高評価率")
-                    report_lines.append(f"　　※YouTube Studioで確認して入力してください")
-                report_lines.append("")
-                
-                # インプレッションのクリック率（YouTube Analytics API必要 - 現在保留中）
-                report_lines.append("　◇投稿後1時間のインプレッションのクリック率")
-                report_lines.append("　　※YouTube Analytics API実装後に取得可能")
-                report_lines.append("")
-                
-                # チャンネル登録者の視聴回数（YouTube Analytics API必要 - 現在保留中）
-                report_lines.append("　◇チャンネル登録者の視聴回数")
-                report_lines.append("　　※YouTube Analytics API実装後に取得可能")
-                report_lines.append("")
-                
-                # 24時間チャンネル登録者数（YouTube Analytics API必要 - 現在保留中）
-                report_lines.append("　◇24時間チャンネル登録者数")
-                report_lines.append("　　※YouTube Analytics API実装後に取得可能")
-                report_lines.append("")
+            else:
+                pub_date = None
+                views = 0
+            
+            # 公開日時を表示（UTC→JST変換 +9時間）
+            if pd.notna(pub_date):
+                pub_date_jst = pub_date + timedelta(hours=9)
+                pub_date_str = f"{pub_date_jst.month}月{pub_date_jst.day}日分　{pub_date_jst.hour}時公開"
+            else:
+                pub_date_str = "不明"
+            
+            report_lines.append(pub_date_str)
+            
+            # 24時間視聴回数
+            goal_24h = current_goals.get("goal_24h_views", 0)
+            
+            if goal_24h > 0:
+                achievement = "達成" if views >= goal_24h else "未達"
+                report_lines.append(f"　◇24時間視聴回数")
+                report_lines.append(f"　　目標：{goal_24h:,}回　結果：{views:,}回（{achievement}）")
+            else:
+                report_lines.append(f"　◇24時間視聴回数")
+                report_lines.append(f"　　結果：{views:,}回")
+            
+            report_lines.append("")
+            
+            # 24時間高評価率（実績は手動入力、目標は目標管理から取得）
+            manual_like_rate = settings.get("manual_like_rate", 0.0)
+            like_rate_goal = current_goals.get("goal_like_rate", 90.0)
+            
+            if manual_like_rate > 0:
+                achievement_like = "達成" if manual_like_rate >= like_rate_goal else "未達"
+                report_lines.append(f"　◇24時間高評価率")
+                report_lines.append(f"　　目標：{like_rate_goal:.0f}％　結果：{manual_like_rate:.1f}%（{achievement_like}）")
+            else:
+                report_lines.append(f"　◇24時間高評価率")
+                report_lines.append(f"　　※YouTube Studioで確認して入力してください")
+            report_lines.append("")
+            
+            # インプレッションのクリック率（YouTube Analytics API必要 - 現在保留中）
+            report_lines.append("　◇投稿後1時間のインプレッションのクリック率")
+            report_lines.append("　　※YouTube Analytics API実装後に取得可能")
+            report_lines.append("")
+            
+            # チャンネル登録者の視聴回数（YouTube Analytics API必要 - 現在保留中）
+            report_lines.append("　◇チャンネル登録者の視聴回数")
+            report_lines.append("　　※YouTube Analytics API実装後に取得可能")
+            report_lines.append("")
+            
+            # 24時間チャンネル登録者数（YouTube Analytics API必要 - 現在保留中）
+            report_lines.append("　◇24時間チャンネル登録者数")
+            report_lines.append("　　※YouTube Analytics API実装後に取得可能")
+            report_lines.append("")
             
             report_lines.append("")
         
         # ■収益について
         if settings.get("include_revenue"):
             report_lines.append("■収益について")
-            report_lines.append(f"{yesterday_str}分")
+            
+            # 選択した収益日を使用
+            selected_revenue_date = settings.get("selected_revenue_date")
+            if selected_revenue_date:
+                revenue_date_str = f"{selected_revenue_date.month}月{selected_revenue_date.day}日"
+            else:
+                yesterday = today - timedelta(days=1)
+                revenue_date_str = f"{yesterday.month}月{yesterday.day}日"
+            
+            report_lines.append(f"{revenue_date_str}分")
             report_lines.append("※YouTube Analytics API実装後に取得可能")
             report_lines.append("")
             
-            # 月間収益（仮データ）
-            report_lines.append(f"{today.month}月合計（目標利益：250,000円）")
+            # 月間収益目標を取得
+            monthly_revenue_goal = current_goals.get("goal_monthly_revenue", 0)
+            if monthly_revenue_goal > 0:
+                report_lines.append(f"{today.month}月合計（目標利益：{monthly_revenue_goal:,}円）")
+            else:
+                report_lines.append(f"{today.month}月合計")
             report_lines.append("※YouTube Analytics API実装後に取得可能")
             report_lines.append("")
         
@@ -279,8 +370,7 @@ class ReportGenerator:
             
             report_lines.append("")
         
-        # 日報の終了
-        report_lines.append("[/info]")
+        # 日報の終了（タグなし）
         
         return "\n".join(report_lines)
     
@@ -294,12 +384,6 @@ class ReportGenerator:
         st.write("---")
         st.write("#### 📄 生成された日報")
         
-        # プレビュー表示
-        st.info("**プレビュー**")
-        st.code(report, language="")
-        
-        st.write("---")
-        
         # コピー用テキストエリア
         st.text_area(
             "👇 Chatworkにコピー&ペーストしてください",
@@ -308,8 +392,40 @@ class ReportGenerator:
             key="report_textarea"
         )
         
-        # クリップボードにコピーボタンの説明
-        st.write("💡 **コピー方法**: 上のテキストエリアをクリック → 全選択（Ctrl+A） → コピー（Ctrl+C）")
+        # ワンクリックコピーボタン（JavaScript使用）
+        import streamlit.components.v1 as components
+        
+        # レポートのエスケープ処理
+        escaped_report = report.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+        
+        copy_button_html = f"""
+        <button onclick="copyToClipboard()" style="
+            background-color: #ff4b4b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+        ">📋 ワンクリックでコピー</button>
+        <span id="copy-status" style="margin-left: 10px; color: green;"></span>
+        <script>
+        function copyToClipboard() {{
+            const text = `{escaped_report}`;
+            navigator.clipboard.writeText(text).then(function() {{
+                document.getElementById('copy-status').innerText = '✅ コピーしました！';
+                setTimeout(function() {{
+                    document.getElementById('copy-status').innerText = '';
+                }}, 2000);
+            }}, function(err) {{
+                document.getElementById('copy-status').innerText = '❌ コピーに失敗しました';
+            }});
+        }}
+        </script>
+        """
+        
+        components.html(copy_button_html, height=60)
     
     def _save_settings(self, settings):
         """

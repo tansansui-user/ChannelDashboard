@@ -40,74 +40,131 @@ class Goals:
         """目標設定タブの表示"""
         st.subheader("📝 目標を設定")
         
+        # 保存成功メッセージを表示（リロード後に表示）
+        if st.session_state.get("goal_saved"):
+            st.success("✅ 目標を保存しました！")
+            del st.session_state.goal_saved
+        
         # 現在の目標を取得
         current_goals = self._get_current_goals()
-               
-        # 目標設定フォーム
-        with st.form("goal_settings_form"):
-            st.write("### 目標値を入力してください")
+        
+        # ヘルパー関数：カンマ付き文字列を数値に変換
+        def parse_number(text, default=0):
+            try:
+                return int(str(text).replace(",", "").replace(" ", ""))
+            except (ValueError, AttributeError):
+                return default
+        
+        # ヘルパー関数：数値をカンマ付き文字列に変換
+        def format_number(num):
+            return f"{int(num):,}"
+        
+        # カンマ自動付与のコールバック関数
+        def format_on_change(key):
+            if key in st.session_state:
+                value = st.session_state[key]
+                num = parse_number(value, 0)
+                if num > 0:
+                    st.session_state[key] = format_number(num)
+        
+        # session_stateの初期化
+        if "goal_24h_views_str" not in st.session_state:
+            st.session_state.goal_24h_views_str = format_number(current_goals.get("goal_24h_views", 5000))
+        if "goal_daily_views_str" not in st.session_state:
+            st.session_state.goal_daily_views_str = format_number(current_goals.get("goal_daily_views", 50000))
+        if "goal_monthly_revenue_str" not in st.session_state:
+            st.session_state.goal_monthly_revenue_str = format_number(current_goals.get("goal_monthly_revenue", 100000))
+        if "goal_daily_revenue_str" not in st.session_state:
+            st.session_state.goal_daily_revenue_str = format_number(current_goals.get("goal_daily_revenue", 3000))
+        if "goal_like_rate_val" not in st.session_state:
+            st.session_state.goal_like_rate_val = float(current_goals.get("goal_like_rate", 90.0))
+        
+        # 目標設定入力欄
+        st.write("### 目標値を入力してください")
+        st.caption("※入力欄から離れると自動でカンマが付きます")
+        
+        # 1. 新規動画24時間再生回数
+        st.text_input(
+            "新規投稿動画の投稿後24時間の再生回数目標",
+            key="goal_24h_views_str",
+            on_change=format_on_change,
+            args=("goal_24h_views_str",),
+            help="新しく投稿した動画が24時間で何回再生されることを目標にしますか？"
+        )
+        
+        # 2. 1日総再生回数
+        st.text_input(
+            "チャンネル内1日の総再生回数目標",
+            key="goal_daily_views_str",
+            on_change=format_on_change,
+            args=("goal_daily_views_str",),
+            help="チャンネル全体で1日に何回再生されることを目標にしますか？"
+        )
+        
+        # 3. 月間収益（円）
+        st.text_input(
+            "1ヶ月の収益目標額（円）",
+            key="goal_monthly_revenue_str",
+            on_change=format_on_change,
+            args=("goal_monthly_revenue_str",),
+            help="1ヶ月でいくらの収益を目標にしますか？"
+        )
+        
+        # 4. 1日収益（円）
+        st.text_input(
+            "1日の収益目標額（円）",
+            key="goal_daily_revenue_str",
+            on_change=format_on_change,
+            args=("goal_daily_revenue_str",),
+            help="1日でいくらの収益を目標にしますか？"
+        )
+        
+        # 5. 高評価率目標（%）- 小数なのでnumber_inputのまま
+        st.number_input(
+            "高評価率の目標（%）",
+            min_value=0.0,
+            max_value=100.0,
+            key="goal_like_rate_val",
+            step=0.1,
+            help="高評価率（高評価数÷（高評価数＋低評価数）×100）の目標値"
+        )
+        
+        # 保存ボタン
+        if st.button("💾 目標を保存", type="primary"):
+            # 入力値を数値に変換
+            goal_24h_views = parse_number(st.session_state.goal_24h_views_str, 5000)
+            goal_daily_views = parse_number(st.session_state.goal_daily_views_str, 50000)
+            goal_monthly_revenue = parse_number(st.session_state.goal_monthly_revenue_str, 100000)
+            goal_daily_revenue = parse_number(st.session_state.goal_daily_revenue_str, 3000)
+            goal_like_rate = st.session_state.goal_like_rate_val
             
-            # 1. 新規動画24時間再生回数
-            goal_24h_views = st.number_input(
-                "新規投稿動画の投稿後24時間の再生回数目標",
-                min_value=0,
-                value=current_goals.get("goal_24h_views", 5000),
-                step=100,
-                help="新しく投稿した動画が24時間で何回再生されることを目標にしますか？"
-            )
+            # 目標を保存
+            goals_data = {
+                "goal_24h_views": goal_24h_views,
+                "goal_daily_views": goal_daily_views,
+                "goal_monthly_revenue": goal_monthly_revenue,
+                "goal_daily_revenue": goal_daily_revenue,
+                "goal_like_rate": goal_like_rate
+            }
             
-            # 2. 1日総再生回数
-            goal_daily_views = st.number_input(
-                "チャンネル内1日の総再生回数目標",
-                min_value=0,
-                value=current_goals.get("goal_daily_views", 50000),
-                step=1000,
-                help="チャンネル全体で1日に何回再生されることを目標にしますか？"
-            )
+            success = self._save_goals(goals_data)
             
-            # 3. 月間収益（円）
-            goal_monthly_revenue = st.number_input(
-                "1ヶ月の収益目標額（円）",
-                min_value=0,
-                value=current_goals.get("goal_monthly_revenue", 100000),
-                step=10000,
-                help="1ヶ月でいくらの収益を目標にしますか？"
-            )
-            
-            # 4. 1日収益（円）
-            goal_daily_revenue = st.number_input(
-                "1日の収益目標額（円）",
-                min_value=0,
-                value=current_goals.get("goal_daily_revenue", 3000),
-                step=100,
-                help="1日でいくらの収益を目標にしますか？"
-            )
-            
-            # 保存ボタン
-            submitted = st.form_submit_button("💾 目標を保存", type="primary")
-            
-            if submitted:
-                # 目標を保存
-                goals_data = {
-                    "goal_24h_views": goal_24h_views,
-                    "goal_daily_views": goal_daily_views,
-                    "goal_monthly_revenue": goal_monthly_revenue,
-                    "goal_daily_revenue": goal_daily_revenue
-                }
-                
-                success = self._save_goals(goals_data)
-                
-                if success:
-                    st.success("✅ 目標を保存しました！")
-                else:
-                    st.error("❌ 目標の保存に失敗しました")
+            if success:
+                # session_stateをクリアして最新データで再初期化
+                for key in ["goal_24h_views_str", "goal_daily_views_str", "goal_monthly_revenue_str", "goal_daily_revenue_str", "goal_like_rate_val"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state.goal_saved = True
+                st.rerun()
+            else:
+                st.error("❌ 目標の保存に失敗しました")
         
         # 現在の目標を表示
         if current_goals:
             st.write("---")
             st.write("### 📊 現在の目標")
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.metric("新規動画24時間再生回数", f"{current_goals.get('goal_24h_views', 0):,} 回")
@@ -116,6 +173,9 @@ class Goals:
             with col2:
                 st.metric("月間収益目標", f"¥{current_goals.get('goal_monthly_revenue', 0):,}")
                 st.metric("1日収益目標", f"¥{current_goals.get('goal_daily_revenue', 0):,}")
+            
+            with col3:
+                st.metric("高評価率目標", f"{current_goals.get('goal_like_rate', 90.0):.1f} %")
     
     def _show_ai_suggestions(self):
         """AI目標提案タブの表示"""
@@ -283,7 +343,8 @@ class Goals:
                 "goal_24h_views": int(latest_goal.get("新規動画24時間再生回数", 0)),
                 "goal_daily_views": int(latest_goal.get("1日総再生回数", 0)),
                 "goal_monthly_revenue": int(latest_goal.get("月間収益", 0)),
-                "goal_daily_revenue": int(latest_goal.get("1日収益", 0))
+                "goal_daily_revenue": int(latest_goal.get("1日収益", 0)),
+                "goal_like_rate": float(latest_goal.get("高評価率目標", 90.0))
             }
         except Exception as e:
             st.error(f"目標データの取得エラー: {str(e)}")
@@ -298,7 +359,8 @@ class Goals:
                 "新規動画24時間再生回数": goals_data["goal_24h_views"],
                 "1日総再生回数": goals_data["goal_daily_views"],
                 "月間収益": goals_data["goal_monthly_revenue"],
-                "1日収益": goals_data["goal_daily_revenue"]
+                "1日収益": goals_data["goal_daily_revenue"],
+                "高評価率目標": goals_data.get("goal_like_rate", 90.0)
             }
             
             # sheets_handler.pyのsave_goals()を使用

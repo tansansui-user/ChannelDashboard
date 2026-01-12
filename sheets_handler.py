@@ -261,8 +261,8 @@ class SheetsHandler:
             
             # ヘッダーが存在しない場合は作成
             if worksheet.row_count == 0 or not worksheet.row_values(1):
-                headers = ["設定日時", "新規動画24時間再生回数", "1日総再生回数", "月間収益", "1日収益"]
-                worksheet.update(values=[headers], range_name='A1:E1')
+                headers = ["設定日時", "新規動画24時間再生回数", "1日総再生回数", "月間収益", "1日収益", "高評価率目標"]
+                worksheet.update(values=[headers], range_name='A1:F1')
             
             # データを追加
             row_data = [
@@ -270,7 +270,8 @@ class SheetsHandler:
                 goals_data["新規動画24時間再生回数"],
                 goals_data["1日総再生回数"],
                 goals_data["月間収益"],
-                goals_data["1日収益"]
+                goals_data["1日収益"],
+                goals_data.get("高評価率目標", 90.0)
             ]
             
             worksheet.append_row(row_data)
@@ -300,11 +301,17 @@ class SheetsHandler:
             rows = data[1:]
             df = pd.DataFrame(rows, columns=headers)
             
-            # 数値列を変換
-            numeric_columns = ["新規動画24時間再生回数", "1日総再生回数", "月間収益", "1日収益"]
-            for col in numeric_columns:
+            # 数値列を変換（整数）
+            int_columns = ["新規動画24時間再生回数", "1日総再生回数", "月間収益", "1日収益"]
+            for col in int_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            
+            # 数値列を変換（小数）
+            float_columns = ["高評価率目標"]
+            for col in float_columns:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(90.0)
             
             return df
             

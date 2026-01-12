@@ -9,6 +9,7 @@ import pandas as pd
 from youtube_data import YouTubeDataFetcher
 from sheets_handler import SheetsHandler
 from dashboard import show_dashboard
+from goals import Goals
 import config
 
 # ページ設定
@@ -255,8 +256,21 @@ elif menu == "ダッシュボード":
 
 # 目標管理
 elif menu == "目標管理":
-    st.header("🎯 目標管理")
-    st.info("目標管理機能は Week 4 で実装予定です")
+    try:
+        # Sheets Handler初期化
+        if st.session_state.sheets_handler is None:
+            st.session_state.sheets_handler = SheetsHandler()
+        
+        # Goalsクラスのインスタンス作成
+        goals = Goals(st.session_state.sheets_handler)
+        
+        # 目標管理画面を表示
+        goals.show()
+        
+    except Exception as e:
+        st.error(f"❌ 目標管理の表示に失敗しました: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
 
 # 日報作成
 elif menu == "日報作成":

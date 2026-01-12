@@ -16,6 +16,7 @@ class SheetsHandler:
         """初期化: Google Sheets APIに接続"""
         self.spreadsheet = None
         self.worksheets = {}
+        self.sheet_names = config.SHEET_NAMES
         self._authenticate()
         
     def _authenticate(self):
@@ -241,39 +242,75 @@ class SheetsHandler:
         except Exception as e:
             raise Exception(f"❌ 目標設定保存エラー: {str(e)}")
     
+    def save_goals(self, goals_data):
+        """
+        目標設定を保存
+        
+        Args:
+            goals_data: 目標データの辞書
+                {
+                    "設定日時": "2026-01-11 10:00:00",
+                    "新規動画24時間再生回数": 5000,
+                    "1日総再生回数": 50000,
+                    "月間収益": 100000,
+                    "1日収益": 3000
+                }
+        """
+        try:
+            worksheet = self.worksheets['goals']
+            
+            # ヘッダーが存在しない場合は作成
+            if worksheet.row_count == 0 or not worksheet.row_values(1):
+                headers = ["設定日時", "新規動画24時間再生回数", "1日総再生回数", "月間収益", "1日収益"]
+                worksheet.update(values=[headers], range_name='A1:E1')
+            
+            # データを追加
+            row_data = [
+                goals_data["設定日時"],
+                goals_data["新規動画24時間再生回数"],
+                goals_data["1日総再生回数"],
+                goals_data["月間収益"],
+                goals_data["1日収益"]
+            ]
+            
+            worksheet.append_row(row_data)
+            print(f"目標設定を保存しました: {goals_data}")
+            
+        except Exception as e:
+            print(f"目標設定保存エラー: {e}")
+            raise
+    
     def get_goals(self):
         """
         目標設定を取得
         
         Returns:
-        --------
-        dict : 目標データ
+            pandas.DataFrame: 目標設定データ
         """
         try:
             worksheet = self.worksheets['goals']
+            data = worksheet.get_all_values()
             
-            # 全データを取得
-            all_data = worksheet.get_all_records()
+            if not data or len(data) < 2:
+                # データが存在しない場合は空のDataFrameを返す
+                return pd.DataFrame()
             
-            # 辞書形式に変換
-            goals = {}
-            for row in all_data:
-                item = row.get('項目', '')
-                value = row.get('目標値', 0)
-                
-                if item == '新規動画24時間再生回数':
-                    goals['new_video_views_24h'] = value
-                elif item == '1日の総再生回数':
-                    goals['daily_total_views'] = value
-                elif item == '1ヶ月の収益目標(円)':
-                    goals['monthly_revenue'] = value
-                elif item == '1日の収益目標(円)':
-                    goals['daily_revenue'] = value
+            # DataFrameに変換
+            headers = data[0]
+            rows = data[1:]
+            df = pd.DataFrame(rows, columns=headers)
             
-            return goals
+            # 数値列を変換
+            numeric_columns = ["新規動画24時間再生回数", "1日総再生回数", "月間収益", "1日収益"]
+            for col in numeric_columns:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+            
+            return df
             
         except Exception as e:
-            raise Exception(f"❌ 目標設定取得エラー: {str(e)}")
+            print(f"目標設定取得エラー: {e}")
+            return pd.DataFrame()
 
 
 # テスト用コード（このファイルを直接実行した場合のみ動作）

@@ -10,6 +10,7 @@ from youtube_data import YouTubeDataFetcher
 from sheets_handler import SheetsHandler
 from dashboard import show_dashboard
 from goals import Goals
+from report_generator import show_report_generator
 import config
 
 # ページ設定
@@ -274,8 +275,21 @@ elif menu == "目標管理":
 
 # 日報作成
 elif menu == "日報作成":
-    st.header("📝 日報作成")
-    st.info("日報作成機能は Week 5 で実装予定です")
+    try:
+        # Sheets Handler初期化
+        if st.session_state.sheets_handler is None:
+            st.session_state.sheets_handler = SheetsHandler()
+        
+        # Goalsクラスのインスタンス作成
+        goals = Goals(st.session_state.sheets_handler)
+        
+        # 日報作成画面を表示
+        show_report_generator(st.session_state.sheets_handler, goals)
+        
+    except Exception as e:
+        st.error(f"❌ 日報作成の表示に失敗しました: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
 
 # 設定
 elif menu == "設定":

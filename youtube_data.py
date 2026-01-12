@@ -129,6 +129,7 @@ class YouTubeDataFetcher:
                 stats = {
                     'views': int(item['statistics'].get('viewCount', 0)),
                     'likes': int(item['statistics'].get('likeCount', 0)),
+                    'dislikes': int(item['statistics'].get('dislikeCount', 0)),
                     'comments': int(item['statistics'].get('commentCount', 0)),
                     'duration': item['contentDetails']['duration'],
                     'thumbnail_url': item['snippet']['thumbnails']['high']['url']
@@ -177,10 +178,37 @@ class YouTubeDataFetcher:
             'avg_view_duration': 0,  # YouTube Analytics API必須
             'avg_view_percentage': 0.0  # YouTube Analytics API必須
         }
-        
         return analytics_data
+    
+    def test_analytics_api(self, video_id):
+        """YouTube Analytics APIのテスト（高評価率取得確認）"""
+        try:
+            # YouTube Analytics APIクライアントを作成
+            creds = None
+            if os.path.exists('token.pickle'):
+                with open('token.pickle', 'rb') as token:
+                    creds = pickle.load(token)
+            
+            youtube_analytics = build('youtubeAnalytics', 'v2', credentials=creds)
+            
+            # 高評価率を含むメトリクスをリクエスト（チャンネル全体）
+            request = youtube_analytics.reports().query(
+                ids='channel==MINE',
+                startDate='2025-12-01',
+                endDate='2026-01-11',
+                metrics='likes,dislikes,views'
+            )
+            response = request.execute()
+            
+            print("✅ YouTube Analytics API レスポンス:")
+            print(response)
+            return response
+            
+        except Exception as e:
+            print(f"❌ YouTube Analytics API エラー: {str(e)}")
+            return None
 
-
+        
 # テストコード
 if __name__ == "__main__":
     print("=" * 50)

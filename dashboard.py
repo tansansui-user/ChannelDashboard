@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+from goals import Goals
 from sheets_handler import SheetsHandler
 
 
@@ -22,10 +23,16 @@ class Dashboard:
             sheets_handler: SheetsHandlerインスタンス
         """
         self.sheets = sheets_handler
+        self.goals = Goals(sheets_handler)
     
     def show(self):
         """ダッシュボードを表示"""
         st.header("📊 ダッシュボード")
+        
+        # 目標達成状況セクション
+        self._show_goal_progress()
+        
+        st.markdown("---")
         
         # データ読み込み
         try:
@@ -52,6 +59,82 @@ class Dashboard:
             st.error(f"❌ データの読み込みに失敗しました: {str(e)}")
             import traceback
             st.code(traceback.format_exc())
+    
+    def _show_goal_progress(self):
+        """
+        目標達成状況セクションを表示
+        """
+        try:
+            # 現在の目標を取得
+            current_goals = self.goals._get_current_goals()
+            
+            # 目標が設定されていない場合
+            if current_goals is None:
+                st.info("💡 目標が設定されていません。「目標管理」タブで目標を設定してください。")
+                return
+            
+            # 実績データを取得
+            actual_data = self.goals._get_latest_actual_data()
+            
+            st.subheader("🎯 目標達成状況")
+            
+            # 2列レイアウト
+            col1, col2 = st.columns(2)
+            
+            # 目標項目のリスト
+            goal_items = [
+                {
+                    "label": "新規動画24時間再生回数",
+                    "goal_key": "goal_24h_views",
+                    "actual_key": "新規動画24時間再生回数",
+                    "unit": "回"
+                },
+                {
+                    "label": "1日総再生回数",
+                    "goal_key": "goal_daily_views",
+                    "actual_key": "1日総再生回数",
+                    "unit": "回"
+                }
+            ]
+            
+            # 各目標の進捗を表示
+            for i, item in enumerate(goal_items):
+                col = col1 if i % 2 == 0 else col2
+                
+                with col:
+                    goal_value = current_goals.get(item["goal_key"], 0)
+                    actual_value = actual_data.get(item["actual_key"], 0)
+                    
+                    if goal_value > 0:
+                        progress = (actual_value / goal_value) * 100
+                    else:
+                        progress = 0
+                    
+                    # 達成状況に応じたメッセージとアイコン
+                    if progress >= 100:
+                        status = "🎉 目標達成！"
+                        color = "green"
+                    elif progress >= 80:
+                        status = "🔥 あと少し！"
+                        color = "orange"
+                    elif progress >= 50:
+                        status = "📈 順調"
+                        color = "blue"
+                    else:
+                        status = "⚠️ 要改善"
+                        color = "red"
+                    
+                    # カード形式で表示
+                    st.markdown(f"**{item['label']}**")
+                    st.progress(min(progress / 100, 1.0))
+                    st.markdown(f"**{progress:.1f}%** ({actual_value:,}{item['unit']} / {goal_value:,}{item['unit']})")
+                    st.markdown(f"<span style='color:{color}'>{status}</span>", unsafe_allow_html=True)
+                    st.markdown("")  # 空行
+            
+        except Exception as e:
+            st.error(f"目標達成状況の表示でエラーが発生しました: {str(e)}")
+            import traceback
+            st.text(traceback.format_exc())
     
     def _show_filters(self):
         """フィルタ表示"""

@@ -8,6 +8,8 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import pandas as pd
 import config
+import streamlit as st
+import json
 
 class SheetsHandler:
     """Google Sheetsとのデータのやり取りを管理するクラス"""
@@ -22,11 +24,20 @@ class SheetsHandler:
     def _authenticate(self):
         """サービスアカウントを使用してGoogle Sheets APIに認証"""
         try:
-            # サービスアカウントの認証情報を読み込み
-            creds = Credentials.from_service_account_file(
-                'service_account.json',
-                scopes=config.SHEETS_SCOPES
-            )
+            # Streamlit Cloud または ローカル環境を判定
+            if hasattr(st, 'secrets') and 'service_account' in st.secrets:
+                # Streamlit Cloud: Secretsから読み込み
+                service_account_info = json.loads(st.secrets["service_account"]["json"])
+                creds = Credentials.from_service_account_info(
+                    service_account_info,
+                    scopes=config.SHEETS_SCOPES
+                )
+            else:
+                # ローカル環境: ファイルから読み込み
+                creds = Credentials.from_service_account_file(
+                    'service_account.json',
+                    scopes=config.SHEETS_SCOPES
+                )
             
             # gspreadクライアントを作成
             client = gspread.authorize(creds)

@@ -13,12 +13,52 @@ from goals import Goals
 from report_generator import show_report_generator
 import config
 
+# パスワード認証関数
+def check_password():
+    """パスワード認証を行う"""
+    def password_entered():
+        """パスワード入力時のコールバック"""
+        # Streamlit Cloud の Secrets からパスワードを取得
+        if hasattr(st, 'secrets') and 'app' in st.secrets:
+            correct_password = st.secrets["app"]["password"]
+        else:
+            # ローカル環境用（開発時）
+            correct_password = "local_dev"
+        
+        if st.session_state["password"] == correct_password:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input(
+            "パスワードを入力してください",
+            type="password",
+            on_change=password_entered,
+            key="password"
+        )
+        st.stop()
+    elif not st.session_state["password_correct"]:
+        st.text_input(
+            "パスワードを入力してください",
+            type="password",
+            on_change=password_entered,
+            key="password"
+        )
+        st.error("パスワードが正しくありません")
+        st.stop()
+    return True
+
 # ページ設定
 st.set_page_config(
     page_title=config.APP_TITLE,
     page_icon=config.APP_ICON,
     layout="wide"
 )
+
+# パスワード認証
+check_password()
 
 # タイトル
 st.title(f"{config.APP_ICON} {config.APP_TITLE}")
